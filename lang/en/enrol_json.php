@@ -26,3 +26,18 @@
 defined('MOODLE_INTERNAL') || die();
 
 $string['pluginname'] = 'Json enrolment';
+$string['pluginname_desc'] = 'The JSON enrolment method allows you to create users and enrolments based on an externally hosted JSON file..';
+$string['apipassword'] = 'API password';
+$string['apiusername'] = 'API username';
+$string['userapiurl'] = 'User API url';
+$string['userapiurl_description'] = 'User API url - eg: https://openapi.xjtlu.edu.cn:8000/esb-mdm/v1/students/information/to-learningmall';
+$string['enrolmentapiurl'] = 'Enrolment API url';
+$string['enrolmentapiurl_description'] = 'Enrolment API url - eg: https://openapi.xjtlu.edu.cn:8000/esb-app/v1/timetable/course-enrolment/to-learningmall';
+$string['usersyncsettings'] = 'User sync settings';
+$string['enrolsyncsettings'] = 'Enrolment sync settings';
+$string['usersync'] = 'Sync user information';
+$string['usersync_desc'] = 'If enabled this will sync user profile fields and create new users';
+$string['newuserauth'] = 'New user auth';
+$string['newuserauth_desc'] = 'When creating a user, which authentication method should be associated with the new user';
+$string['update_onsync'] = 'On every sync';
+$string['user_data_mapping'] = 'User data mapping';

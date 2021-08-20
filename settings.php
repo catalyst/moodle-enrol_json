@@ -26,8 +26,92 @@
 defined('MOODLE_INTERNAL') || die();
 
 if ($hassiteconfig) {
-    // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedIf
     if ($ADMIN->fulltree) {
-        // TODO: Define the plugin settings page - {@link https://docs.moodle.org/dev/Admin_settings}.
+        require_once($CFG->dirroot . '/enrol/json/lib.php');
+        // General settings.
+        $settings->add(new admin_setting_heading('enrol_json_settings', '',
+            get_string('pluginname_desc', 'enrol_json')));
+
+        $settings->add(new admin_setting_configtext('enrol_json/apiuser',
+            get_string('apiusername', 'enrol_json'), '', ''));
+
+        $settings->add(new admin_setting_configpasswordunmask('enrol_json/apipass',
+            get_string('apipassword', 'enrol_json'), '', ''));
+
+        $settings->add(new admin_setting_configtext('enrol_json/userapiurl',
+            get_string('userapiurl', 'enrol_json'),
+            get_string('userapiurl_description', 'enrol_json'), ''));
+
+        $settings->add(new admin_setting_configtext('enrol_json/enrolmentapiurl',
+            get_string('enrolmentapiurl', 'enrol_json'),
+            get_string('enrolmentapiurl_description', 'enrol_json'), ''));
+
+        // Label and Sync Options.
+        $settings->add(new admin_setting_heading('enrol_json/usersyncheader', new lang_string('usersyncsettings', 'enrol_json'), ''));
+
+        $settings->add(new admin_setting_configcheckbox('enrol_json/usersync',
+            get_string('usersync', 'enrol_json'), get_string('usersync_desc', 'enrol_json'), 1));
+
+        $authsenabled = get_enabled_auth_plugins();
+        $choices = array();
+        foreach ($authsenabled as $auth) {
+            $authplugin = get_auth_plugin($auth);
+            // Get the auth title (from core or own auth lang files)
+            $authtitle = $authplugin->get_title();
+            $choices[$auth] = $authtitle;
+        }
+        $settings->add(new admin_setting_configselect('enrol_json/newuserauth',
+            get_string('newuserauth', 'enrol_json'), get_string('newuserauth_desc', 'enrol_json'), '', $choices));
+
+        $authplugin = get_auth_plugin('manual');
+        enrol_json_display_auth_options($settings, 'enrol_json',
+            $authplugin->userfields, '');
+
+        // Label and Sync Options.
+        $settings->add(new admin_setting_heading('enrol_json/enrolsyncheader', new lang_string('enrolsyncsettings', 'enrol_json'), ''));
+
+        $options = array('id'=>'id', 'idnumber'=>'idnumber', 'shortname'=>'shortname');
+        $settings->add(new admin_setting_configselect('enrol_json/localcoursefield',
+            get_string('localcoursefield', 'enrol_database'), '', 'idnumber', $options));
+
+        $settings->add(new admin_setting_configtext('enrol_json/remotecoursefield',
+            get_string('remotecoursefield', 'enrol_database'), get_string('remotecoursefield_desc', 'enrol_database'), ''));
+
+
+        $options = array('id' => 'id', 'idnumber' => 'idnumber', 'email' => 'email', 'username' => 'username');
+        $settings->add(new admin_setting_configselect('enrol_json/localuserfield',
+            get_string('localuserfield', 'enrol_database'), '', 'idnumber', $options));
+
+        $settings->add(new admin_setting_configtext('enrol_json/remoteuserfield',
+            get_string('remoteuserfield', 'enrol_database'), get_string('remoteuserfield_desc', 'enrol_database'), ''));
+
+
+        $options = array('id'=>'id', 'shortname'=>'shortname');
+        $settings->add(new admin_setting_configselect('enrol_json/localrolefield',
+            get_string('localrolefield', 'enrol_database'), '', 'shortname', $options));
+
+        $settings->add(new admin_setting_configtext('enrol_json/remoterolefield',
+            get_string('remoterolefield', 'enrol_database'), get_string('remoterolefield_desc', 'enrol_database'), ''));
+
+        if (!during_initial_install()) {
+            $options = get_default_enrol_roles(context_system::instance());
+            $student = get_archetype_roles('student');
+            $student = reset($student);
+            $settings->add(new admin_setting_configselect('enrol_json/defaultrole',
+                get_string('defaultrole', 'enrol_database'),
+                get_string('defaultrole_desc', 'enrol_database'),
+                $student->id ?? null,
+                $options));
+        }
+
+        $settings->add(new admin_setting_configcheckbox('enrol_database/ignorehiddencourses', get_string('ignorehiddencourses', 'enrol_database'), get_string('ignorehiddencourses_desc', 'enrol_database'), 0));
+
+        $options = array(ENROL_EXT_REMOVED_UNENROL        => get_string('extremovedunenrol', 'enrol'),
+            ENROL_EXT_REMOVED_KEEP           => get_string('extremovedkeep', 'enrol'),
+            ENROL_EXT_REMOVED_SUSPEND        => get_string('extremovedsuspend', 'enrol'),
+            ENROL_EXT_REMOVED_SUSPENDNOROLES => get_string('extremovedsuspendnoroles', 'enrol'));
+        $settings->add(new admin_setting_configselect('enrol_database/unenrolaction', get_string('extremovedaction', 'enrol'), get_string('extremovedaction_help', 'enrol'), ENROL_EXT_REMOVED_UNENROL, $options));
+
+
     }
 }
