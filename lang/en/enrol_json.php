@@ -41,3 +41,7 @@ $string['newuserauth'] = 'New user auth';
 $string['newuserauth_desc'] = 'When creating a user, which authentication method should be associated with the new user';
 $string['update_onsync'] = 'On every sync';
 $string['user_data_mapping'] = 'User data mapping';
+$string['privacy:metadata'] = 'The JSON enrolment plugin does not store any personal data.';
+$string['syncenrolmentstask'] = 'Sync enrolments';
+$string['syncuserstask'] = 'Sync users';
+$stringp['failedapicall'] = 'Failed to request api url';

@@ -46,6 +46,14 @@ if ($hassiteconfig) {
             get_string('enrolmentapiurl', 'enrol_json'),
             get_string('enrolmentapiurl_description', 'enrol_json'), ''));
 
+        $options = array('id' => 'id', 'idnumber' => 'idnumber', 'email' => 'email', 'username' => 'username');
+        $settings->add(new admin_setting_configselect('enrol_json/localuserfield',
+            get_string('localuserfield', 'enrol_database'), '', 'idnumber', $options));
+
+        $settings->add(new admin_setting_configtext('enrol_json/remoteuserfield',
+            get_string('remoteuserfield', 'enrol_database'), get_string('remoteuserfield_desc', 'enrol_database'), ''));
+
+
         // Label and Sync Options.
         $settings->add(new admin_setting_heading('enrol_json/usersyncheader', new lang_string('usersyncsettings', 'enrol_json'), ''));
 
@@ -63,6 +71,17 @@ if ($hassiteconfig) {
         $settings->add(new admin_setting_configselect('enrol_json/newuserauth',
             get_string('newuserauth', 'enrol_json'), get_string('newuserauth_desc', 'enrol_json'), '', $choices));
 
+        // Sync Options.
+        $deleteopt = array();
+        $deleteopt[AUTH_REMOVEUSER_KEEP] = get_string('auth_remove_keep', 'auth');
+        $deleteopt[AUTH_REMOVEUSER_SUSPEND] = get_string('auth_remove_suspend', 'auth');
+        $deleteopt[AUTH_REMOVEUSER_FULLDELETE] = get_string('auth_remove_delete', 'auth');
+
+        $settings->add(new admin_setting_configselect('enrol_json/removeuser',
+            new lang_string('auth_remove_user_key', 'auth'),
+            new lang_string('auth_remove_user', 'auth'), AUTH_REMOVEUSER_KEEP, $deleteopt));
+
+
         $authplugin = get_auth_plugin('manual');
         enrol_json_display_auth_options($settings, 'enrol_json',
             $authplugin->userfields, '');
@@ -76,14 +95,6 @@ if ($hassiteconfig) {
 
         $settings->add(new admin_setting_configtext('enrol_json/remotecoursefield',
             get_string('remotecoursefield', 'enrol_database'), get_string('remotecoursefield_desc', 'enrol_database'), ''));
-
-
-        $options = array('id' => 'id', 'idnumber' => 'idnumber', 'email' => 'email', 'username' => 'username');
-        $settings->add(new admin_setting_configselect('enrol_json/localuserfield',
-            get_string('localuserfield', 'enrol_database'), '', 'idnumber', $options));
-
-        $settings->add(new admin_setting_configtext('enrol_json/remoteuserfield',
-            get_string('remoteuserfield', 'enrol_database'), get_string('remoteuserfield_desc', 'enrol_database'), ''));
 
 
         $options = array('id'=>'id', 'shortname'=>'shortname');
@@ -111,7 +122,6 @@ if ($hassiteconfig) {
             ENROL_EXT_REMOVED_SUSPEND        => get_string('extremovedsuspend', 'enrol'),
             ENROL_EXT_REMOVED_SUSPENDNOROLES => get_string('extremovedsuspendnoroles', 'enrol'));
         $settings->add(new admin_setting_configselect('enrol_database/unenrolaction', get_string('extremovedaction', 'enrol'), get_string('extremovedaction_help', 'enrol'), ENROL_EXT_REMOVED_UNENROL, $options));
-
 
     }
 }

@@ -133,6 +133,419 @@ class enrol_json_plugin extends enrol_plugin {
     public function can_add_instance($courseid) {
         return true;
     }
+
+    /**
+     * Helper to check that plugin is configured.
+     *
+     * @return bool
+     * @throws dml_exception
+     */
+    public function is_configured() {
+        $this->load_config();
+        if (!empty($this->config->apipass) && !empty($this->config->apiuser) && !empty($this->config->userapiurl)) {
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Get list of all users from external JSON.
+     *
+     * @return array
+     */
+    function get_userlist() {
+        $studentapiurl = trim($this->config->userapiurl);
+        $apipassword = $this->config->apipass;
+        $apiusername = trim($this->config->apiuser);
+
+        $curl = new \curl();
+        $options = array(
+            'CONNECTTIMEOUT' => 5,
+            'CURLOPT_TIMEOUT'=> 300,
+            'CURLOPT_USERPWD' => "$apiusername:$apipassword"
+        );
+        $params = array();
+
+        $response = $curl->get($studentapiurl, $params, $options);
+        $externaljson = json_decode($response);
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            debugging("Failed to get JSON from". $studentapiurl);
+            print_error('failedapicall', 'enrol_json');
+        }
+        $users = [];
+        foreach ($externaljson as $row) {
+            if (!isset($row->{$this->config->remoteuserfield})){
+                debugging(print_r($row, true));
+                print_error('invalidjsonnomap', 'gradeexport_aebridge');
+            }
+            if (isset($users[$row->{$this->config->remoteuserfield}])) {
+                // Duplicated user found.
+                mtrace("duplicate userid found:".$row->{$this->config->remoteuserfield});
+                debugging(print_r($row, true));
+            } else {
+                $users[$row->{$this->config->remoteuserfield}] = $row;
+            }
+        }
+
+        return $users;
+    }
+
+    /**
+     * Reads user information from DB and return it in an object.
+     *
+     * @param string $username username
+     * @return array
+     */
+    function get_userinfo_asobj($externaluser) {
+        $user = new stdClass();
+        $keys = array_keys(get_object_vars($this->config));
+        $updatekeys = [];
+        foreach ($keys as $key) {
+            if (preg_match('/^field_map_(.+)$/', $key, $match)) {
+                $field = $match[1];
+
+                if (!empty($this->config->{'field_map_'.$field})) {
+                    $user->$field = $externaluser->{$this->config->{'field_map_'.$field}};
+                }
+
+            }
+        }
+        return $user;
+    }
+
+    /**
+     * Reads any other information for a user from external database,
+     * then returns it in an array.
+     *
+     * @param string $username
+     * @return array
+     */
+    function get_userinfo($username) {
+
+        // Array to map local fieldnames we want, to external fieldnames.
+        $selectfields = $this->db_attributes();
+
+        $result = array();
+        // If at least one field is mapped from external db, get that mapped data.
+        if ($selectfields) {
+            $select = array();
+            $fieldcount = 0;
+            foreach ($selectfields as $localname=>$externalname) {
+                // Without aliasing, multiple occurrences of the same external
+                // name can coalesce in only occurrence in the result.
+                $select[] = "$externalname AS F".$fieldcount;
+                $fieldcount++;
+            }
+            $select = implode(', ', $select);
+            $sql = "SELECT $select
+                      FROM {$this->config->table}
+                     WHERE {$this->config->fielduser} = '".$this->ext_addslashes($extusername)."'";
+
+            if ($rs = $authdb->Execute($sql)) {
+                if (!$rs->EOF) {
+                    $fields = $rs->FetchRow();
+                    // Convert the associative array to an array of its values so we don't have to worry about the case of its keys.
+                    $fields = array_values($fields);
+                    foreach (array_keys($selectfields) as $index => $localname) {
+                        $value = $fields[$index];
+                        $result[$localname] = core_text::convert($value, $this->config->extencoding, 'utf-8');
+                    }
+                }
+                $rs->Close();
+            }
+        }
+        $authdb->Close();
+        return $result;
+    }
+
+    /**
+     * Synchronizes user from external json to moodle user table.
+     *
+     * Sync should be done by using idnumber attribute, not username.
+     * You need to pass firstsync parameter to function to fill in
+     * idnumbers if they don't exists in moodle user table.
+     *
+     * Syncing users removes (disables) users that don't exists anymore in external source.
+     * Creates new users.
+     *
+     * @param progress_trace $trace
+     * @param bool $do_updates  Optional: set to true to force an update of existing accounts
+     * @return int 0 means success, 1 means failure
+     */
+    function sync_users(progress_trace $trace, $do_updates=false) {
+        global $CFG, $DB;
+
+        require_once($CFG->dirroot . '/user/lib.php');
+        require_once($CFG->libdir.'/filelib.php');
+
+        // List external users.
+        $userlist = $this->get_userlist();
+        $userkeys = array_keys($userlist); // list of user keys.
+
+        // Delete obsolete internal users.
+        if (!empty($this->config->removeuser)) {
+
+            $suspendselect = "";
+            if ($this->config->removeuser == AUTH_REMOVEUSER_SUSPEND) {
+                $suspendselect = "AND u.suspended = 0";
+            }
+
+            // Find obsolete users.
+            if (count($userlist)) {
+                $removeusers = array();
+                $params['authtype'] = $this->config->newuserauth;
+                $sql = "SELECT u.id, u.username, u.idnumber, u.email
+                          FROM {user} u
+                         WHERE u.auth=:authtype
+                           AND u.deleted=0
+                           AND u.mnethostid=:mnethostid
+                           $suspendselect";
+                $params['mnethostid'] = $CFG->mnet_localhost_id;
+                $internalusersrs = $DB->get_recordset_sql($sql, $params);
+
+                $usernamelist = array_flip($userlist);
+                foreach ($internalusersrs as $internaluser) {
+                    if (!array_key_exists($internaluser->{$this->config->localuserfield}, $usernamelist)) {
+                        $removeusers[] = $internaluser;
+                    }
+                }
+                $internalusersrs->close();
+            }
+
+            if (!empty($removeusers)) {
+                $trace->output(get_string('auth_dbuserstoremove', 'auth_db', count($removeusers)));
+
+                foreach ($removeusers as $user) {
+                    if ($this->config->removeuser == AUTH_REMOVEUSER_FULLDELETE) {
+                        delete_user($user);
+                        $trace->output(get_string('auth_dbdeleteuser', 'auth_db', array('name'=>$user->username, 'id'=>$user->id)), 1);
+                    } else if ($this->config->removeuser == AUTH_REMOVEUSER_SUSPEND) {
+                        $updateuser = new stdClass();
+                        $updateuser->id   = $user->id;
+                        $updateuser->suspended = 1;
+                        user_update_user($updateuser, false);
+                        $trace->output(get_string('auth_dbsuspenduser', 'auth_db', array('name'=>$user->username, 'id'=>$user->id)), 1);
+                    }
+                }
+            }
+            unset($removeusers);
+        }
+
+        if (!count($userlist)) {
+            // Exit right here, nothing else to do.
+            $trace->output("No users found in external source! - DANGER!");
+            $trace->finished();
+            return 0;
+        }
+
+        // Update existing accounts.
+        if ($do_updates) {
+            $trace->output("Update existing accounts");
+            // Narrow down what fields we need to update.
+            $all_keys = array_keys(get_object_vars($this->config));
+            $updatekeys = array();
+            foreach ($all_keys as $key) {
+                if (preg_match('/^field_updatelocal_(.+)$/',$key, $match)) {
+                    if ($this->config->{$key} === 'onlogin') {
+                        array_push($updatekeys, $match[1]); // The actual key name.
+                    }
+                }
+            }
+            unset($all_keys); unset($key);
+
+            // Only go ahead if we actually have fields to update locally.
+            if (!empty($updatekeys)) {
+                $update_users = array();
+                // All the drivers can cope with chunks of 10,000. See line 4491 of lib/dml/tests/dml_est.php
+                $userlistchunks = array_chunk($userkeys , 10000);
+                foreach($userlistchunks as $userlistchunk) {
+                    list($in_sql, $params) = $DB->get_in_or_equal($userlistchunk, SQL_PARAMS_NAMED, 'u', true);
+                    $params['mnethostid'] = $CFG->mnet_localhost_id;
+                    $sql = "SELECT u.id, u.username, u.suspended, u.idnumber, u.email
+                          FROM {user} u
+                         WHERE u.deleted = 0 AND u.mnethostid = :mnethostid AND u.{$this->config->localuserfield} {$in_sql}";
+                    $update_users = $update_users + $DB->get_records_sql($sql, $params);
+                }
+
+                if ($update_users) {
+                    $trace->output("Users to check for updates: ".count($update_users));
+                    foreach ($update_users as $user) {
+                        if ($this->update_user_record($user->username, $updatekeys, $userlist[$user->{$this->config->localuserfield}], false, (bool) $user->suspended)) {
+                            $trace->output(get_string('auth_dbupdatinguser', 'auth_db', array('name'=>$user->username, 'id'=>$user->id)), 1);
+                        }
+                    }
+                    unset($update_users);
+                }
+            }
+        }
+
+
+        // Create missing accounts.
+        // NOTE: this is very memory intensive and generally inefficient.
+        $suspendselect = "";
+        if ($this->config->removeuser == AUTH_REMOVEUSER_SUSPEND) {
+            $suspendselect = "AND u.suspended = 0";
+        }
+        $localuserfield = clean_param($this->config->localuserfield, PARAM_ALPHANUMEXT);
+
+        $sql = "SELECT u.id, u.username, u.idnumber, u.email
+                  FROM {user} u
+                 WHERE u.deleted='0' AND $localuserfield <> '' AND mnethostid=:mnethostid $suspendselect";
+
+        $users = $DB->get_records_sql($sql, array('mnethostid' => $CFG->mnet_localhost_id));
+
+        // Simplify down to same key as externaljson.
+        $usernames = array();
+        if (!empty($users)) {
+            foreach ($users as $user) {
+                array_push($usernames, $user->{$this->config->localuserfield});
+            }
+            unset($users);
+        }
+        $add_users = array_diff($userkeys, $usernames);
+        unset($usernames);
+
+        if (!empty($add_users)) {
+            $trace->output(get_string('auth_dbuserstoadd','auth_db',count($add_users)));
+            // Do not use transactions around this foreach, we want to skip problematic users, not revert everything.
+            foreach($add_users as $userkey) {
+                if ($this->config->removeuser == AUTH_REMOVEUSER_SUSPEND) {
+                    if ($olduser = $DB->get_record('user', array($localuserfield => $userkey, 'deleted' => 0, 'suspended' => 1,
+                        'mnethostid' => $CFG->mnet_localhost_id))) {
+                        $updateuser = new stdClass();
+                        $updateuser->id = $olduser->id;
+                        $updateuser->suspended = 0;
+                        user_update_user($updateuser);
+                        $trace->output(get_string('auth_dbreviveduser', 'auth_db', array('name' => $userkey,
+                            'id' => $olduser->id)), 1);
+                        continue;
+                    }
+                }
+
+                // Do not try to undelete users here, instead select suspending if you ever expect users will reappear.
+
+                // Prep a few params.
+                $user = $this->get_userinfo_asobj($userlist[$userkey]);
+                $user->confirmed  = 1;
+                $user->auth       = $this->config->newuserauth;
+                $user->mnethostid = $CFG->mnet_localhost_id;
+
+                if ($collision = $DB->get_record_select('user', "username = :username AND mnethostid = :mnethostid AND auth <> :auth", array('username'=>$user->username, 'mnethostid'=>$CFG->mnet_localhost_id, 'auth'=>$this->newuserauth), 'id,username,auth')) {
+                    $trace->output(get_string('auth_dbinsertuserduplicate', 'auth_db', array('username'=>$user->username, 'auth'=>$collision->auth)), 1);
+                    continue;
+                }
+
+                try {
+                    $id = user_create_user($user, false, false); // It is truly a new user.
+                    $trace->output(get_string('auth_dbinsertuser', 'auth_db', array('name'=>$user->username, 'id'=>$id)), 1);
+                } catch (moodle_exception $e) {
+                    $trace->output(get_string('auth_dbinsertusererror', 'auth_db', $user->username), 1);
+                    continue;
+                }
+
+                // Save custom profile fields here.
+                require_once($CFG->dirroot . '/user/profile/lib.php');
+                $user->id = $id;
+                profile_save_data($user);
+
+                // Make sure user context is present.
+                context_user::instance($id);
+
+                \core\event\user_created::create_from_userid($id)->trigger();
+            }
+            unset($add_users);
+        }
+        $trace->finished();
+        return 0;
+    }
+
+    /**
+     * Update a local user record from an external source - copied from authlib.
+     * This is a lighter version of the one in moodlelib -- won't do
+     * expensive ops such as enrolment.
+     *
+     * @param string $username username
+     * @param array $updatekeys fields to update, false updates all fields.
+     * @param stdClass $externalrecord - external record for this user.
+     * @param bool $triggerevent set false if user_updated event should not be triggered.
+     *             This will not affect user_password_updated event triggering.
+     * @param bool $suspenduser Should the user be suspended?
+     * @return stdClass|bool updated user record or false if there is no new info to update.
+     */
+    protected function update_user_record($username, $updatekeys = false, $externalrecord, $triggerevent = false, $suspenduser = false) {
+        global $CFG, $DB;
+
+        require_once($CFG->dirroot.'/user/profile/lib.php');
+
+        // Just in case check text case.
+        $username = trim(core_text::strtolower($username));
+
+        // Get the current user record.
+        $user = $DB->get_record('user', array('username' => $username, 'mnethostid' => $CFG->mnet_localhost_id));
+        if (empty($user)) { // Trouble.
+            error_log($this->errorlogtag . get_string('auth_usernotexist', 'auth', $username));
+            print_error('auth_usernotexist', 'auth', '', $username);
+            die;
+        }
+
+        // Protect the userid from being overwritten.
+        $userid = $user->id;
+
+        $needsupdate = false;
+
+        if ($externalrecord) {
+            $newinfo = truncate_userinfo((array)$externalrecord);
+            if (empty($updatekeys)) { // All keys? this does not support removing values.
+                $updatekeys = array_keys($newinfo);
+            }
+
+            if (!empty($updatekeys)) {
+                $newuser = new stdClass();
+                $newuser->id = $userid;
+                // The cast to int is a workaround for MDL-53959.
+                $newuser->suspended = (int) $suspenduser;
+                // Load all custom fields.
+                $profilefields = (array) profile_user_record($user->id, false);
+                $newprofilefields = [];
+
+                foreach ($updatekeys as $key) {
+                    if (!empty($this->config->{'field_map_' . $key}) && isset($externalrecord->{$this->config->{'field_map_' . $key}})) {
+                        $value = $externalrecord->{$this->config->{'field_map_' . $key}};
+                    } else if (isset($newinfo[$key])) {
+                        $value = $newinfo[$key];
+                    } else {
+                        $value = '';
+                    }
+
+                    if (!empty($this->config->{'field_updatelocal_' . $key})) {
+                        if (preg_match('/^profile_field_(.*)$/', $key, $match)) {
+                            // Custom field.
+                            $field = $match[1];
+                            $currentvalue = isset($profilefields[$field]) ? $profilefields[$field] : null;
+                            $newprofilefields[$field] = $value;
+                        } else {
+                            // Standard field.
+                            $currentvalue = isset($user->$key) ? $user->$key : null;
+                            $newuser->$key = $value;
+                        }
+
+                        // Only update if it's changed.
+                        if ($currentvalue !== $value) {
+                            $needsupdate = true;
+                        }
+                    }
+                }
+            }
+
+            if ($needsupdate) {
+                user_update_user($newuser, false, $triggerevent);
+                profile_save_custom_fields($newuser->id, $newprofilefields);
+                return $DB->get_record('user', array('id' => $userid, 'deleted' => 0));
+            }
+        }
+
+        return false;
+    }
 }
 
 /**
@@ -159,6 +572,7 @@ function enrol_json_display_auth_options($settings, $auth, $userfields, $helptex
         'onlogin'   => get_string('update_onsync', 'enrol_json'));
 
     // Generate the list of profile fields to allow updates / lock.
+    array_unshift($userfields, 'username');
     if (!empty($customfields)) {
         $userfields = array_merge($userfields, $customfields);
         $allcustomfields = profile_get_custom_fields();
