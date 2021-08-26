@@ -66,7 +66,6 @@ class sync_users extends \core\task\scheduled_task {
         \core_php_time_limit::raise();
         raise_memory_limit(MEMORY_HUGE);
 
-
         $enrol->sync_users($trace, true);
     }
 }

@@ -115,13 +115,13 @@ if ($hassiteconfig) {
                 $options));
         }
 
-        $settings->add(new admin_setting_configcheckbox('enrol_database/ignorehiddencourses', get_string('ignorehiddencourses', 'enrol_database'), get_string('ignorehiddencourses_desc', 'enrol_database'), 0));
+        $settings->add(new admin_setting_configcheckbox('enrol_json/ignorehiddencourses', get_string('ignorehiddencourses', 'enrol_database'), get_string('ignorehiddencourses_desc', 'enrol_database'), 0));
 
         $options = array(ENROL_EXT_REMOVED_UNENROL        => get_string('extremovedunenrol', 'enrol'),
             ENROL_EXT_REMOVED_KEEP           => get_string('extremovedkeep', 'enrol'),
             ENROL_EXT_REMOVED_SUSPEND        => get_string('extremovedsuspend', 'enrol'),
             ENROL_EXT_REMOVED_SUSPENDNOROLES => get_string('extremovedsuspendnoroles', 'enrol'));
-        $settings->add(new admin_setting_configselect('enrol_database/unenrolaction', get_string('extremovedaction', 'enrol'), get_string('extremovedaction_help', 'enrol'), ENROL_EXT_REMOVED_UNENROL, $options));
+        $settings->add(new admin_setting_configselect('enrol_json/unenrolaction', get_string('extremovedaction', 'enrol'), get_string('extremovedaction_help', 'enrol'), ENROL_EXT_REMOVED_UNENROL, $options));
 
     }
 }

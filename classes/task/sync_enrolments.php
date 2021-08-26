@@ -53,8 +53,20 @@ class sync_enrolments extends \core\task\scheduled_task {
             $trace->output('Plugin not enabled');
             return;
         }
+        if (empty(get_config('enrol_json', 'usersync'))) {
+            $trace->output('User sync disabled');
+            return;
+        }
 
-        $enrol = enrol_get_plugin('enrol_json');
+        $enrol = enrol_get_plugin('json');
+        if (!$enrol->is_configured()) {
+            $trace->output('Plugin not configured');
+            return;
+        }
+
+        \core_php_time_limit::raise();
+        raise_memory_limit(MEMORY_HUGE);
+
         // Update enrolments -- these handlers should autocreate courses if required.
         $enrol->sync_enrolments($trace);
     }

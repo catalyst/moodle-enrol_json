@@ -1,5 +1,5 @@
 <?php
-// This file is part of Moodle - https://moodle.org/
+// This file is part of Moodle - http://moodle.org/
 //
 // Moodle is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -12,20 +12,25 @@
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
+// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Plugin version and other meta-data are defined here.
+ * Capabilities for json enrolment plugin.
  *
- * @package     enrol_json
- * @copyright   2021 Catalyst IT
- * @license     https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ * @package    enrol_json
+ * @copyright  2021 Catalyst IT
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
 defined('MOODLE_INTERNAL') || die();
 
-$plugin->component = 'enrol_json';
-$plugin->release = '0.1.0';
-$plugin->version = 2021082003;
-$plugin->requires = 2020110900;
-$plugin->maturity = MATURITY_STABLE;
+$capabilities = array(
+    'enrol/json:config' => array(
+        'captype' => 'write',
+        'contextlevel' => CONTEXT_COURSE,
+        'archetypes' => array(
+            'manager' => CAP_ALLOW,
+            'editingteacher' => CAP_ALLOW,
+        )
+    ),
+);

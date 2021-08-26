@@ -142,7 +142,8 @@ class enrol_json_plugin extends enrol_plugin {
      */
     public function is_configured() {
         $this->load_config();
-        if (!empty($this->config->apipass) && !empty($this->config->apiuser) && !empty($this->config->userapiurl)) {
+        if (!empty($this->config->apipass) && !empty($this->config->apiuser) && !empty($this->config->userapiurl) &&
+            !empty($this->config->remotecoursefield)) {
             return true;
         }
         return false;
@@ -188,6 +189,34 @@ class enrol_json_plugin extends enrol_plugin {
         }
 
         return $users;
+    }
+
+    /**
+     * Get list of all users from external JSON.
+     *
+     * @return array
+     */
+    function get_userenrolments() {
+        $enrolmentapiurl = trim($this->config->enrolmentapiurl);
+        $apipassword = $this->config->apipass;
+        $apiusername = trim($this->config->apiuser);
+
+        $curl = new \curl();
+        $options = array(
+            'CONNECTTIMEOUT' => 5,
+            'CURLOPT_TIMEOUT'=> 300,
+            'CURLOPT_USERPWD' => "$apiusername:$apipassword"
+        );
+        $params = array();
+
+        $response = $curl->get($enrolmentapiurl, $params, $options);
+        $externaljson = json_decode($response);
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            debugging("Failed to get JSON from". $enrolmentapiurl);
+            print_error('failedapicall', 'enrol_json');
+        }
+
+        return $externaljson;
     }
 
     /**
@@ -545,6 +574,224 @@ class enrol_json_plugin extends enrol_plugin {
         }
 
         return false;
+    }
+    /**
+     * Forces synchronisation of all enrolments with external database.
+     *
+     * @param progress_trace $trace
+     * @return int 0 means success, 1 db connect failure, 2 db read failure
+     */
+    public function sync_enrolments(progress_trace $trace) {
+        global $DB, $CFG;
+
+        require_once($CFG->libdir.'/filelib.php');
+        $trace->output('Starting user enrolment synchronisation...');
+        $userstoprocess = $this->get_userenrolments();
+
+        $coursefield      = trim($this->get_config('remotecoursefield'));
+        $userfield        = trim($this->get_config('remoteuserfield'));
+        $rolefield        = trim($this->get_config('remoterolefield'));
+
+        $localrolefield   = $this->get_config('localrolefield');
+        $localuserfield   = $this->get_config('localuserfield');
+        $localcoursefield = $this->get_config('localcoursefield');
+
+        $unenrolaction    = $this->get_config('unenrolaction');
+        $defaultrole      = $this->get_config('defaultrole');
+
+        $ignorehidden = $this->get_config('ignorehiddencourses');
+
+        // Create roles mapping.
+        $allroles = get_all_roles();
+        if (!isset($allroles[$defaultrole])) {
+            $defaultrole = 0;
+        }
+        $roles = array();
+        foreach ($allroles as $role) {
+            $roles[$role->$localrolefield] = $role->id;
+        }
+
+        // First find all existing courses with enrol instance.
+        $existingcourses = array();
+        $sql = "SELECT c.id, c.visible, c.$localcoursefield AS mapping, e.id AS enrolid, c.shortname
+                FROM {course} c
+                JOIN {enrol} e ON (e.courseid = c.id AND e.enrol = 'json')";
+        $rs = $DB->get_recordset_sql($sql); // Watch out for idnumber duplicates.
+        foreach ($rs as $course) {
+            if (empty($course->mapping)) {
+                continue;
+            }
+            $existingcourses[$course->mapping] = $course;
+        }
+        $rs->close();
+
+        $missingcourses = [];
+        $missingusers = [];
+        $hiddencourses = [];
+        foreach ($userstoprocess as $record) {
+            // If known missing user, skip.
+            if (in_array($record->$userfield, $missingusers)) {
+                continue;
+            }
+
+            // If user not exist - skip, add to missing users list.
+            $user = $DB->get_record('user', [$localuserfield => $record->$userfield, 'deleted' => 0]);
+            if (empty($user)) {
+                $missingusers[] = $record->$userfield;
+                continue;
+            }
+
+            // Get list of this users current enrolments with enrol_json.
+            $sql = "SELECT ue.id, ue.status, ra.roleid, c.shortname, c.idnumber, c.id as courseid, e.id as enrolid, c.$localcoursefield AS mapping
+                      FROM {user} u
+                      JOIN {role_assignments} ra ON (ra.userid = u.id AND ra.component = 'enrol_json')
+                      JOIN {user_enrolments} ue ON (ue.userid = u.id AND ue.enrolid = ra.itemid)
+                      JOIN {enrol} e on e.id = ue.enrolid
+                      JOIN {course} c on c.id = e.courseid
+                     WHERE u.deleted = 0 and u.id = :userid";
+            $params = ['userid' => $user->id];
+            $userenrolments = $DB->get_records_sql($sql, $params);
+            $existingenrolments = [];
+            foreach ($userenrolments as $ue) {
+                $existingenrolments[$ue->mapping] = $ue;
+            }
+            unset($userenrolments);
+
+            // TODO Get list of this users groups in all courses.
+
+            // For all courses in the external data for this user.
+            foreach ($record->enrolments as $ecourse) {
+                if (empty($existingenrolments[$ecourse->$coursefield])) {
+                    $enrolcoursecount = 0;
+                    // If known as a missing course - skip.
+                    if (in_array($ecourse->$coursefield, $missingcourses)) {
+                        continue;
+                    }
+
+                    // get Json enrolment entry for this course.
+                    if (empty($existingcourses[$ecourse->$coursefield])) {
+                        // JSON enrolment not added to this course - add it.
+                        // Get course record.
+                        $course = $DB->get_record('course', [$localcoursefield => $ecourse->$coursefield]);
+                        if (empty($course)) {
+                            $missingcourses[] = $ecourse->$coursefield;
+                            continue;
+                        }
+                        if (!$course->visible and $ignorehidden) {
+                            $hiddencourses[] = $ecourse->$coursefield;
+                            continue;
+                        }
+                        $course->enrolid = $this->add_instance($course);
+                        $existingcourses[$ecourse->$coursefield] = $course;
+                    }
+
+                    // Sanity check
+                    if (empty($existingcourses[$ecourse->$coursefield]) ||
+                        (!$existingcourses[$ecourse->$coursefield]->visible and $ignorehidden)) {
+                        // Likely a hidden course, but no record so we can't enrol.
+                        continue;
+                    }
+
+                    // Enrol user in course.
+                    $enrol = new stdClass();
+                    $enrol->id = $existingcourses[$ecourse->$coursefield]->enrolid;
+                    $enrol->courseid = $existingcourses[$ecourse->$coursefield]->id;
+                    $enrol->enrol = 'json';
+
+                    // TODO Add correct role from mapping.
+                    $roleid = $defaultrole;
+
+                    $this->enrol_user($enrol, $user->id, $roleid, 0, 0, ENROL_USER_ACTIVE);
+                    $enrolcoursecount++;
+                    $existingenrolments[$ecourse->$coursefield] = $enrol;
+                    $existingenrolments[$ecourse->$coursefield]->inexternal = true;
+                } else {
+                    $existingenrolments[$ecourse->$coursefield]->inexternal = true;
+                    // Reenable enrolment when previously disable enrolment refreshed.
+                    if ($existingenrolments[$ecourse->$coursefield]->status == ENROL_USER_SUSPENDED) {
+                        $enrol = new stdClass();
+                        $enrol->id = $existingcourses[$ecourse->$coursefield]->enrolid;
+                        $enrol->courseid = $existingcourses[$ecourse->$coursefield]->id;
+                        $enrol->enrol = 'json';
+                        $this->update_user_enrol($enrol, $user->id, ENROL_USER_ACTIVE);
+                        $trace->output("unsuspending: $user->username ==> $enrol->courseid", 1);
+                    }
+
+                    // TODO Check if correct role and update if needed.
+                }
+
+                // for all groups defined - if already in group - skip.
+                // If group not exist - create it.
+
+                // If group removal set - remove from users.
+
+
+            }
+            if (!empty($enrolcoursecount)) {
+                $trace->output("enrolled $user->username in $enrolcoursecount courses");
+            }
+            // If unenrol set - check if user enrolled in places that need to be removed.
+            // Deal with enrolments removed from external table.
+            if ($unenrolaction == ENROL_EXT_REMOVED_UNENROL) {
+                foreach ($existingenrolments as $enrolment) {
+                    if (!empty($enrolment->inexternal)) {
+                        continue;
+                    }
+                    $enrol = new stdClass();
+                    $enrol->id = $enrolment->enrolid;
+                    $enrol->courseid = $enrolment->courseid;
+                    $enrol->enrol = 'json';
+                    $this->unenrol_user($enrol,  $user->id);
+                    $trace->output("unenrolling:  $user->username ==> $enrolment->courseid", 1);
+                }
+
+            } else if ($unenrolaction == ENROL_EXT_REMOVED_KEEP) {
+                // Keep - only adding enrolments.
+
+            } else if ($unenrolaction == ENROL_EXT_REMOVED_SUSPEND or $unenrolaction == ENROL_EXT_REMOVED_SUSPENDNOROLES) {
+                // Suspend enrolments.
+                foreach ($existingenrolments as $enrolment) {
+                    if (!empty($enrolment->inexternal)) {
+                        continue;
+                    }
+                    if ($enrolment->status != ENROL_USER_SUSPENDED) {
+                        $enrol = new stdClass();
+                        $enrol->id = $enrolment->enrolid;
+                        $enrol->courseid = $enrolment->courseid;
+                        $enrol->enrol = 'json';
+                        $this->update_user_enrol($enrol, $user->id, ENROL_USER_SUSPENDED);
+                        $trace->output("suspending: $user->username ==> $enrolment->courseid", 1);
+                    }
+                    if ($unenrolaction == ENROL_EXT_REMOVED_SUSPENDNOROLES) {
+                        $context = context_course::instance($enrolment->courseid);
+                        role_unassign_all(array('contextid' => $context->id, 'userid'=> $user->id, 'component' => 'enrol_json', 'itemid' => $enrol->id));
+
+                        $trace->output("unsassigning all roles: $user->username ==> $enrolment->courseid", 1);
+                    }
+                }
+            }
+        }
+
+        unset($userstoprocess);
+
+        // Print list of missing users.
+        if ($missingusers) {
+            $list = implode(', ', array_values($missingusers));
+            $trace->output("error: following users do not exist - $list", 1);
+            unset($list);
+        }
+
+        // Print list of missing courses.
+        if ($missingcourses) {
+            $list = implode(', ', array_values($missingcourses));
+            $trace->output("error: following courses do not exist - $list", 1);
+            unset($list);
+        }
+
+        $trace->output('...user enrolment synchronisation finished.');
+        $trace->finished();
+
+        return 0;
     }
 }
 

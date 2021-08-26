@@ -44,4 +44,5 @@ $string['user_data_mapping'] = 'User data mapping';
 $string['privacy:metadata'] = 'The JSON enrolment plugin does not store any personal data.';
 $string['syncenrolmentstask'] = 'Sync enrolments';
 $string['syncuserstask'] = 'Sync users';
-$stringp['failedapicall'] = 'Failed to request api url';
+$string['failedapicall'] = 'Failed to request api url';
+$string['json:config'] = 'Configure json plugin';
