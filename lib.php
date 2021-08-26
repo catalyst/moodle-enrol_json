@@ -661,6 +661,12 @@ class enrol_json_plugin extends enrol_plugin {
 
             // For all courses in the external data for this user.
             foreach ($record->enrolments as $ecourse) {
+                $roleid = $defaultrole;
+                if (!empty($rolefield) && !empty($ecourse->$rolefield)) {
+                    if (!empty($roles[$ecourse->$rolefield])) {
+                        $roleid = $roles[$ecourse->$rolefield];
+                    }
+                }
                 if (empty($existingenrolments[$ecourse->$coursefield])) {
                     $enrolcoursecount = 0;
                     // If known as a missing course - skip.
@@ -698,9 +704,6 @@ class enrol_json_plugin extends enrol_plugin {
                     $enrol->courseid = $existingcourses[$ecourse->$coursefield]->id;
                     $enrol->enrol = 'json';
 
-                    // TODO Add correct role from mapping.
-                    $roleid = $defaultrole;
-
                     $this->enrol_user($enrol, $user->id, $roleid, 0, 0, ENROL_USER_ACTIVE);
                     $enrolcoursecount++;
                     $existingenrolments[$ecourse->$coursefield] = $enrol;
@@ -716,8 +719,12 @@ class enrol_json_plugin extends enrol_plugin {
                         $this->update_user_enrol($enrol, $user->id, ENROL_USER_ACTIVE);
                         $trace->output("unsuspending: $user->username ==> $enrol->courseid", 1);
                     }
+                    $context = context_course::instance($enrolment->courseid);
 
-                    // TODO Check if correct role and update if needed.
+                    // Sanity check to make sure user has the correct default role.
+                    if (!user_has_role_assignment($user->id, $roleid, $context)) {
+                        role_assign($roleid, $user->id, $context, 'enrol_json');
+                    }
                 }
 
                 // for all groups defined - if already in group - skip.
@@ -768,6 +775,13 @@ class enrol_json_plugin extends enrol_plugin {
 
                         $trace->output("unsassigning all roles: $user->username ==> $enrolment->courseid", 1);
                     }
+                }
+            } else {
+                foreach ($existingenrolments as $enrolment) {
+                    if (!empty($enrolment->inexternal)) {
+                        continue;
+                    }
+                    $trace->output("User: $user->username is missing from $enrolment->courseid in the external data but unenrolment is currently disabled.", 1);
                 }
             }
         }
