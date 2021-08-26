@@ -591,10 +591,13 @@ class enrol_json_plugin extends enrol_plugin {
         $coursefield      = trim($this->get_config('remotecoursefield'));
         $userfield        = trim($this->get_config('remoteuserfield'));
         $rolefield        = trim($this->get_config('remoterolefield'));
+        $groupfield        = trim($this->get_config('remotegroupfield'));
+
 
         $localrolefield   = $this->get_config('localrolefield');
         $localuserfield   = $this->get_config('localuserfield');
         $localcoursefield = $this->get_config('localcoursefield');
+        $localgroupfield  = $this->get_config('localgroupfield');
 
         $unenrolaction    = $this->get_config('unenrolaction');
         $defaultrole      = $this->get_config('defaultrole');
@@ -658,6 +661,17 @@ class enrol_json_plugin extends enrol_plugin {
             unset($userenrolments);
 
             // TODO Get list of this users groups in all courses.
+            $sql = "SELECT g.id, g.courseid, g.idnumber, g.name
+                  FROM {groups} g
+                  JOIN {groups_members} gm ON gm.groupid = g.id
+                 WHERE gm.userid = ?";
+
+            $rs = $DB->get_recordset_sql($sql, array($user->id));
+            $existinggroups = [];
+            foreach ($rs as $r) {
+                $existinggroups[$r->courseid][$r->$localgroupfield] = $r;
+            }
+            $rs->close();
 
             // For all courses in the external data for this user.
             foreach ($record->enrolments as $ecourse) {
@@ -727,7 +741,18 @@ class enrol_json_plugin extends enrol_plugin {
                     }
                 }
 
-                // for all groups defined - if already in group - skip.
+                if (!empty($ecourse->groups)) {
+                    $courseid = $existingcourses[$ecourse->$coursefield]->id;
+                    foreach ($ecourse->groups as $g) {
+                        if (empty($existinggroups[$courseid][$g->$groupfield])) {
+                            // Not a member of the group
+                            // TODO Check group exists - if not create.
+
+                            // TODO Add user to group.
+                        }
+                    }
+                }
+
                 // If group not exist - create it.
 
                 // If group removal set - remove from users.

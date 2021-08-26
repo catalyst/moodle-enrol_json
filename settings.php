@@ -96,6 +96,12 @@ if ($hassiteconfig) {
         $settings->add(new admin_setting_configtext('enrol_json/remotecoursefield',
             get_string('remotecoursefield', 'enrol_database'), get_string('remotecoursefield_desc', 'enrol_database'), ''));
 
+        $options = array('name' => 'name', 'idnumber' => 'idnumber');
+        $settings->add(new admin_setting_configselect('enrol_json/localgroupfield',
+            get_string('localgroupfield', 'enrol_json'), '', 'name', $options));
+
+        $settings->add(new admin_setting_configtext('enrol_json/remotegroupfield',
+            get_string('remotegroupfield', 'enrol_json'), '', ''));
 
         $options = array('id'=>'id', 'shortname'=>'shortname');
         $settings->add(new admin_setting_configselect('enrol_json/localrolefield',

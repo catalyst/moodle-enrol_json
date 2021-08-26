@@ -46,3 +46,5 @@ $string['syncenrolmentstask'] = 'Sync enrolments';
 $string['syncuserstask'] = 'Sync users';
 $string['failedapicall'] = 'Failed to request api url';
 $string['json:config'] = 'Configure json plugin';
+$string['remotegroupfield'] = 'Remote group field';
+$string['localgroupfield'] = 'Local group field';
