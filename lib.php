@@ -585,6 +585,7 @@ class enrol_json_plugin extends enrol_plugin {
         global $DB, $CFG;
 
         require_once($CFG->libdir.'/filelib.php');
+        require_once($CFG->dirroot . '/group/lib.php');
         $trace->output('Starting user enrolment synchronisation...');
         $userstoprocess = $this->get_userenrolments();
 
@@ -733,31 +734,41 @@ class enrol_json_plugin extends enrol_plugin {
                         $this->update_user_enrol($enrol, $user->id, ENROL_USER_ACTIVE);
                         $trace->output("unsuspending: $user->username ==> $enrol->courseid", 1);
                     }
-                    $context = context_course::instance($enrolment->courseid);
+                    $context = context_course::instance($existingcourses[$ecourse->$coursefield]->id);
 
                     // Sanity check to make sure user has the correct default role.
-                    if (!user_has_role_assignment($user->id, $roleid, $context)) {
+                    if (!user_has_role_assignment($user->id, $roleid, $context->id)) {
                         role_assign($roleid, $user->id, $context, 'enrol_json');
                     }
                 }
 
-                if (!empty($ecourse->groups)) {
+                if (!empty($ecourse->groups) && !empty($groupfield)) {
                     $courseid = $existingcourses[$ecourse->$coursefield]->id;
                     foreach ($ecourse->groups as $g) {
                         if (empty($existinggroups[$courseid][$g->$groupfield])) {
-                            // Not a member of the group
-                            // TODO Check group exists - if not create.
-
-                            // TODO Add user to group.
+                            // TODO - cache group information for this course better?
+                            $groups = groups_get_all_groups($courseid);
+                            $foundgroup = false;
+                            foreach ($groups as $group) {
+                                if ($group->$localgroupfield == $g->$groupfield) {
+                                    groups_add_member($group->id, $user->id, 'enrol_json');
+                                    $foundgroup = true;
+                                }
+                            }
+                            if (!$foundgroup) {
+                                $newgroupdata = new \stdClass();
+                                $newgroupdata->$localgroupfield = $g->$groupfield;
+                                $newgroupdata->name = $newgroupdata->$localgroupfield; // If name not being used.
+                                $newgroupdata->courseid = $courseid;
+                                $newgroupdata->description = '';
+                                $gid = groups_create_group($newgroupdata);
+                                groups_add_member($gid, $user->id, 'enrol_json');
+                            }
                         }
                     }
                 }
 
-                // If group not exist - create it.
-
                 // If group removal set - remove from users.
-
-
             }
             if (!empty($enrolcoursecount)) {
                 $trace->output("enrolled $user->username in $enrolcoursecount courses");
