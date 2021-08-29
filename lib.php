@@ -661,7 +661,7 @@ class enrol_json_plugin extends enrol_plugin {
             }
             unset($userenrolments);
 
-            // TODO Get list of this users groups in all courses.
+            // Get list of this users groups in all courses.
             $sql = "SELECT g.id, g.courseid, g.idnumber, g.name
                   FROM {groups} g
                   JOIN {groups_members} gm ON gm.groupid = g.id
@@ -673,6 +673,10 @@ class enrol_json_plugin extends enrol_plugin {
                 $existinggroups[$r->courseid][$r->$localgroupfield] = $r;
             }
             $rs->close();
+
+            if (empty($record->enrolments)) {
+                $trace->output("could not find any enrolments for user:".$user->id);
+            }
 
             // For all courses in the external data for this user.
             foreach ($record->enrolments as $ecourse) {
@@ -768,7 +772,7 @@ class enrol_json_plugin extends enrol_plugin {
                     }
                 }
 
-                // If group removal set - remove from users.
+                // TODO: Check if group removal set - remove from users.
             }
             if (!empty($enrolcoursecount)) {
                 $trace->output("enrolled $user->username in $enrolcoursecount courses");
