@@ -662,7 +662,7 @@ class enrol_json_plugin extends enrol_plugin {
             unset($userenrolments);
 
             // Get list of this users groups in all courses.
-            $sql = "SELECT g.id, g.courseid, g.idnumber, g.name
+            $sql = "SELECT g.id, g.courseid, g.idnumber, g.name, gm.component
                   FROM {groups} g
                   JOIN {groups_members} gm ON gm.groupid = g.id
                  WHERE gm.userid = ?";
@@ -746,8 +746,8 @@ class enrol_json_plugin extends enrol_plugin {
                     }
                 }
 
+                $courseid = $existingcourses[$ecourse->$coursefield]->id;
                 if (!empty($ecourse->groups) && !empty($groupfield)) {
-                    $courseid = $existingcourses[$ecourse->$coursefield]->id;
                     foreach ($ecourse->groups as $g) {
                         if (empty($existinggroups[$courseid][$g->$groupfield])) {
                             // TODO - cache group information for this course better?
@@ -768,11 +768,21 @@ class enrol_json_plugin extends enrol_plugin {
                                 $gid = groups_create_group($newgroupdata);
                                 groups_add_member($gid, $user->id, 'enrol_json');
                             }
+                        } else {
+                            // Remove this group from the $existinggroups array for this user as it should remain.
+                            unset($existinggroups[$courseid][$g->$groupfield]);
                         }
                     }
                 }
 
-                // TODO: Check if group removal set - remove from users.
+                // Remove old json groups.
+                if (!empty($existinggroups[$courseid])) {
+                    foreach ($existinggroups[$courseid] as $group) {
+                        if ($group->component == 'enrol_json') {
+                            groups_remove_member($group->id, $user->id);
+                        }
+                    }
+                }
             }
             if (!empty($enrolcoursecount)) {
                 $trace->output("enrolled $user->username in $enrolcoursecount courses");
