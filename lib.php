@@ -740,9 +740,37 @@ class enrol_json_plugin extends enrol_plugin {
                     }
                     $context = context_course::instance($existingcourses[$ecourse->$coursefield]->id);
 
-                    // Sanity check to make sure user has the correct default role.
-                    if (!user_has_role_assignment($user->id, $roleid, $context->id)) {
-                        role_assign($roleid, $user->id, $context, 'enrol_json');
+                    // Sanity check to make sure user has the correct role and remove any others.
+                    $sql = "SELECT ra.id, ra.roleid, ra.itemid
+                              FROM {user} u
+                              JOIN {role_assignments} ra ON (ra.userid = u.id AND ra.component = 'enrol_json')
+                              WHERE u.id = :userid AND ra.contextid = :contextid";
+                    $existingroles = $DB->get_records_sql($sql, ['userid' => $user->id,
+                                                         'contextid' => $context->id]);
+
+                    // Bug with old version inserted enrolments with itemid = 0, clean them up if found.
+                    foreach ($existingroles as $exr) {
+                        if ($exr->itemid == 0) {
+                            // This is an incorrect role assignment with an empty itemid - remove it.
+                            role_unassign($exr->roleid, $user->id, $context->id, 'enrol_json', $exr->itemid);
+                            unset($existingroles[$exr->id]);
+                        }
+                    }
+
+                    $hascorrectrole = false;
+                    foreach ($existingroles as $exr) {
+                        if ($exr->roleid == $roleid) {
+                            $hascorrectrole = true;
+                            continue;
+                        }
+                        $trace->output("remove old role:".$exr->roleid ." from $user->username in courseid: ".
+                                       $existingcourses[$ecourse->$coursefield]->id);
+                        // Remove any incorrect roles.
+                        role_unassign($exr->roleid, $user->id, $context->id, 'enrol_json', $exr->itemid);
+                    }
+                    // Add back correct role with correct itemid if needed.
+                    if (!$hascorrectrole) {
+                        role_assign($roleid, $user->id, $context, 'enrol_json', $existingcourses[$ecourse->$coursefield]->enrolid);
                     }
                 }
 
