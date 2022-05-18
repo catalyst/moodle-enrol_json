@@ -1,8 +1,8 @@
 # Json enrolment #
 
-TODO Describe the plugin shortly here.
+This plugin was developed thanks to funding from Xi’an Jiaotong-Liverpool University (https://www.xjtlu.edu.cn)0
 
-TODO Provide more detailed description here.
+This plugin allows the enrolment process to be managed using a JSON structured file - see example-enrol.json and example-user.json files for an example of it's use.
 
 ## Installing via uploaded ZIP file ##
 

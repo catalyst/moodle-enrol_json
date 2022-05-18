@@ -1,0 +1,52 @@
+[{
+		"adAccount": "azaria.green",
+		"firstName": "Azaria ",
+		"lastName": "Green",
+		"email": "a.green@example.com",
+		"enrolments": [{
+				"course": "accounting1",
+				"courseId": "accounting1",
+				"role": "editingteacher",
+				"groups": []
+			},
+			{
+				"course": "ECO205-2122-S1",
+				"courseId": "ECO205-2122-S1",
+				"role": "student",
+				"groups": [{
+					"group": "Tutor Group 1",
+					"groupId": "tutors1"
+				       },
+                                       {
+					"group": "Tutor Group 5",
+					"groupId": "tutors5"
+				       }]
+			}
+		]
+	},
+	{
+		"adAccount": "a.kahu",
+		"firstName": "Kahu",
+		"lastName": "Smith",
+		"email": "kahu@example.com",
+		"enrolments": [{
+				"course": "IOM425-2122-S1",
+				"courseId": "IOM425-2122-S1",
+				"role": "student",
+				"groups": [{
+					"group": "Lab-1-2122-S1",
+					"groupId": "Lab-1-2122-S1"
+				}]
+			},
+			{
+				"course": "ECO205-2122-S1",
+				"courseId": "ECO205-2122-S1",
+				"role": "student",
+				"groups": [{
+					"group": "IOM419-2122-S1",
+					"groupId": "IOM419-2122-S1"
+				}]
+			}
+		]
+	}
+]
