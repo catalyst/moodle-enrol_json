@@ -170,7 +170,8 @@ class enrol_json_plugin extends enrol_plugin {
         $response = $curl->get($studentapiurl, $params, $options);
         $externaljson = json_decode($response);
         if (json_last_error() !== JSON_ERROR_NONE) {
-            debugging("Failed to get JSON from". $studentapiurl);
+            mtrace("failed to get json from url:" .$studentapiurl. "with username:".$apiusername);
+            mtrace($response);
             print_error('failedapicall', 'enrol_json');
         }
         $users = [];
@@ -212,7 +213,8 @@ class enrol_json_plugin extends enrol_plugin {
         $response = $curl->get($enrolmentapiurl, $params, $options);
         $externaljson = json_decode($response);
         if (json_last_error() !== JSON_ERROR_NONE) {
-            debugging("Failed to get JSON from". $enrolmentapiurl);
+            mtrace("failed to get json from url:" .$enrolmentapiurl. "with username:".$apiusername);
+            mtrace($response);
             print_error('failedapicall', 'enrol_json');
         }
 
