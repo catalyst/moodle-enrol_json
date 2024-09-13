@@ -641,6 +641,10 @@ class enrol_json_plugin extends enrol_plugin {
             }
 
             // If user not exist - skip, add to missing users list.
+            if ($localuserfield == 'username' && !empty($record->username) {
+                // Always set username to lowercase (Moodle stores it that way.).
+                $record->username = strtolower($record->username);
+            }
             $user = $DB->get_record('user', [$localuserfield => $record->$userfield, 'deleted' => 0]);
             if (empty($user)) {
                 $missingusers[] = $record->$userfield;
