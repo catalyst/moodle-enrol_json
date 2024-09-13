@@ -917,10 +917,14 @@ function enrol_json_display_auth_options($settings, $auth, $userfields, $helptex
         'onlogin'   => get_string('update_onsync', 'enrol_json'));
 
     // Generate the list of profile fields to allow updates / lock.
+    $allcustomfields = profile_get_custom_fields();
+    $customfields = [];
+    foreach ($allcustomfields as $field) {
+        $customfields[] = 'profile_field_'.$field->shortname;
+    }
     array_unshift($userfields, 'username');
     if (!empty($customfields)) {
         $userfields = array_merge($userfields, $customfields);
-        $allcustomfields = profile_get_custom_fields();
         $customfieldname = array_combine(array_column($allcustomfields, 'shortname'), $allcustomfields);
     }
 
