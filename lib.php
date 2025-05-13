@@ -503,7 +503,7 @@ class enrol_json_plugin extends enrol_plugin {
      * @param bool $suspenduser Should the user be suspended?
      * @return stdClass|bool updated user record or false if there is no new info to update.
      */
-    protected function update_user_record($username, $updatekeys = false, $externalrecord, $triggerevent = false, $suspenduser = false) {
+    protected function update_user_record($username, $updatekeys = false, $externalrecord = false, $triggerevent = false, $suspenduser = false) {
         global $CFG, $DB;
 
         require_once($CFG->dirroot.'/user/profile/lib.php');
