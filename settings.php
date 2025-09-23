@@ -76,6 +76,7 @@ if ($hassiteconfig) {
         $deleteopt[AUTH_REMOVEUSER_KEEP] = get_string('auth_remove_keep', 'auth');
         $deleteopt[AUTH_REMOVEUSER_SUSPEND] = get_string('auth_remove_suspend', 'auth');
         $deleteopt[AUTH_REMOVEUSER_FULLDELETE] = get_string('auth_remove_delete', 'auth');
+        $deleteopt[AUTH_REMOVEUSER_SUSPEND_UNENROL] = get_string('auth_remove_suspend_unenrol', 'enrol_json');
 
         $settings->add(new admin_setting_configselect('enrol_json/removeuser',
             new lang_string('auth_remove_user_key', 'auth'),

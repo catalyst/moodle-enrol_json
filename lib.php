@@ -28,6 +28,11 @@ defined('MOODLE_INTERNAL') || die();
 // methods as necessary.
 
 /**
+ * AUTH_REMOVEUSER_FULLDELETE constant for removing enrolments for suspended users.
+ */
+define('AUTH_REMOVEUSER_SUSPEND_UNENROL', 3);
+
+/**
  * Class enrol_json_plugin.
  */
 class enrol_json_plugin extends enrol_plugin {
@@ -290,6 +295,51 @@ class enrol_json_plugin extends enrol_plugin {
     }
 
     /**
+     * Get user json enrolment method course enrolments for user.
+     *
+     * @param mixed $user - User details
+     * @param string $localcoursefield plugin config
+     *
+     * @return mixed existingenrolments user existing enrolments
+     */
+    function existingenrolments($user, $localcoursefield) {
+        global $DB;
+        $sql = "SELECT ue.id, ue.status, ra.roleid, c.shortname, c.idnumber, c.id as courseid, e.id as enrolid, c.$localcoursefield AS mapping
+                    FROM {user} u
+                    JOIN {role_assignments} ra ON (ra.userid = u.id AND ra.component = 'enrol_json')
+                    JOIN {user_enrolments} ue ON (ue.userid = u.id AND ue.enrolid = ra.itemid)
+                    JOIN {enrol} e on e.id = ue.enrolid
+                    JOIN {course} c on c.id = e.courseid
+                    WHERE u.deleted = 0 and u.id = :userid";
+        $params = ['userid' => $user->id];
+        $userenrolments = $DB->get_records_sql($sql, $params);
+        $existingenrolments = [];
+        foreach ($userenrolments as $ue) {
+            $existingenrolments[$ue->mapping] = $ue;
+        }
+        unset($userenrolments);
+        return $existingenrolments;
+    }
+
+    /**
+     * Unenrol user from all courses with json enrolment method.
+     *
+     * @param progress_trace $trace
+     * @param mixed $enrolment user enrolment details
+     * @param mixed $user - User details
+     *
+     * @return void
+     */
+    function unenrol(progress_trace $trace, $enrolment, $user) {
+        $enrol = new stdClass();
+        $enrol->id = $enrolment->enrolid;
+        $enrol->courseid = $enrolment->courseid;
+        $enrol->enrol = 'json';
+        $this->unenrol_user($enrol,  $user->id);
+        $trace->output("unenrolling:  $user->username ==> courseid ".  $enrolment->courseid, 1);
+    }
+
+    /**
      * Synchronizes user from external json to moodle user table.
      *
      * Sync should be done by using idnumber attribute, not username.
@@ -305,10 +355,10 @@ class enrol_json_plugin extends enrol_plugin {
      */
     function sync_users(progress_trace $trace, $do_updates=false) {
         global $CFG, $DB;
-
+        $localcoursefield = $this->get_config('localcoursefield');
         require_once($CFG->dirroot . '/user/lib.php');
         require_once($CFG->libdir.'/filelib.php');
-
+        $count = 0;
         // List external users.
         $userlist = $this->get_userlist();
         $userkeys = array_keys($userlist); // list of user keys.
@@ -317,7 +367,8 @@ class enrol_json_plugin extends enrol_plugin {
         if (!empty($this->config->removeuser)) {
 
             $suspendselect = "";
-            if ($this->config->removeuser == AUTH_REMOVEUSER_SUSPEND) {
+            if ($this->config->removeuser == AUTH_REMOVEUSER_SUSPEND ||
+                    $this->config->removeuser == AUTH_REMOVEUSER_SUSPEND_UNENROL) {
                 $suspendselect = "AND u.suspended = 0";
             }
 
@@ -333,10 +384,8 @@ class enrol_json_plugin extends enrol_plugin {
                            $suspendselect";
                 $params['mnethostid'] = $CFG->mnet_localhost_id;
                 $internalusersrs = $DB->get_recordset_sql($sql, $params);
-
-                $usernamelist = array_flip($userlist);
                 foreach ($internalusersrs as $internaluser) {
-                    if (!array_key_exists($internaluser->{$this->config->localuserfield}, $usernamelist)) {
+                    if (!array_key_exists($internaluser->{$this->config->localuserfield}, $userlist)) {
                         $removeusers[] = $internaluser;
                     }
                 }
@@ -347,16 +396,32 @@ class enrol_json_plugin extends enrol_plugin {
                 $trace->output(get_string('auth_dbuserstoremove', 'auth_db', count($removeusers)));
 
                 foreach ($removeusers as $user) {
+                    if ($count >= 500) {
+                        $trace->output("Processed 500 users, waiting for a while before continuing...");
+                        sleep(MINSECS);  // Wait for a while to avoid overwhelming the server.
+                        $count = 0;
+                    }
                     if ($this->config->removeuser == AUTH_REMOVEUSER_FULLDELETE) {
                         delete_user($user);
                         $trace->output(get_string('auth_dbdeleteuser', 'auth_db', array('name'=>$user->username, 'id'=>$user->id)), 1);
-                    } else if ($this->config->removeuser == AUTH_REMOVEUSER_SUSPEND) {
+                    } else if ($this->config->removeuser == AUTH_REMOVEUSER_SUSPEND ||
+                        $this->config->removeuser == AUTH_REMOVEUSER_SUSPEND_UNENROL) {
+                        // Suspend user.
                         $updateuser = new stdClass();
                         $updateuser->id   = $user->id;
                         $updateuser->suspended = 1;
                         user_update_user($updateuser, false);
                         $trace->output(get_string('auth_dbsuspenduser', 'auth_db', array('name'=>$user->username, 'id'=>$user->id)), 1);
+                        // Unenrol from course.
+                        if ($this->config->removeuser == AUTH_REMOVEUSER_SUSPEND_UNENROL) {
+                            // Get list of this users current enrolments with enrol_json.
+                            $existingenrolments = $this->existingenrolments($user, $localcoursefield);
+                            foreach ($existingenrolments as $enrolment) {
+                                $this->unenrol($trace, $enrolment, $user);
+                            }
+                        }
                     }
+                    $count++;
                 }
             }
             unset($removeusers);
@@ -414,7 +479,8 @@ class enrol_json_plugin extends enrol_plugin {
         // Create missing accounts.
         // NOTE: this is very memory intensive and generally inefficient.
         $suspendselect = "";
-        if ($this->config->removeuser == AUTH_REMOVEUSER_SUSPEND) {
+        if ($this->config->removeuser == AUTH_REMOVEUSER_SUSPEND ||
+        $this->config->removeuser == AUTH_REMOVEUSER_SUSPEND_UNENROL) {
             $suspendselect = "AND u.suspended = 0";
         }
         $localuserfield = clean_param($this->config->localuserfield, PARAM_ALPHANUMEXT);
@@ -435,12 +501,12 @@ class enrol_json_plugin extends enrol_plugin {
         }
         $add_users = array_diff($userkeys, $usernames);
         unset($usernames);
-
+        $count = 0;
         if (!empty($add_users)) {
             $trace->output(get_string('auth_dbuserstoadd','auth_db',count($add_users)));
             // Do not use transactions around this foreach, we want to skip problematic users, not revert everything.
             foreach($add_users as $userkey) {
-                if ($this->config->removeuser == AUTH_REMOVEUSER_SUSPEND) {
+                if ($this->config->removeuser == AUTH_REMOVEUSER_SUSPEND || $this->config->removeuser == AUTH_REMOVEUSER_SUSPEND_UNENROL) {
                     if ($olduser = $DB->get_record('user', array($localuserfield => $userkey, 'deleted' => 0, 'suspended' => 1,
                         'mnethostid' => $CFG->mnet_localhost_id))) {
                         $updateuser = new stdClass();
@@ -481,7 +547,7 @@ class enrol_json_plugin extends enrol_plugin {
 
                 // Make sure user context is present.
                 context_user::instance($id);
-
+                $count++;
                 \core\event\user_created::create_from_userid($id)->trigger();
             }
             unset($add_users);
@@ -652,20 +718,7 @@ class enrol_json_plugin extends enrol_plugin {
             }
 
             // Get list of this users current enrolments with enrol_json.
-            $sql = "SELECT ue.id, ue.status, ra.roleid, c.shortname, c.idnumber, c.id as courseid, e.id as enrolid, c.$localcoursefield AS mapping
-                      FROM {user} u
-                      JOIN {role_assignments} ra ON (ra.userid = u.id AND ra.component = 'enrol_json')
-                      JOIN {user_enrolments} ue ON (ue.userid = u.id AND ue.enrolid = ra.itemid)
-                      JOIN {enrol} e on e.id = ue.enrolid
-                      JOIN {course} c on c.id = e.courseid
-                     WHERE u.deleted = 0 and u.id = :userid";
-            $params = ['userid' => $user->id];
-            $userenrolments = $DB->get_records_sql($sql, $params);
-            $existingenrolments = [];
-            foreach ($userenrolments as $ue) {
-                $existingenrolments[$ue->mapping] = $ue;
-            }
-            unset($userenrolments);
+            $existingenrolments = $this->existingenrolments($user, $localcoursefield);
 
             // Get list of this users groups in all courses.
             $sql = "SELECT g.id, g.courseid, g.idnumber, g.name, gm.component
@@ -828,12 +881,7 @@ class enrol_json_plugin extends enrol_plugin {
                     if (!empty($enrolment->inexternal)) {
                         continue;
                     }
-                    $enrol = new stdClass();
-                    $enrol->id = $enrolment->enrolid;
-                    $enrol->courseid = $enrolment->courseid;
-                    $enrol->enrol = 'json';
-                    $this->unenrol_user($enrol,  $user->id);
-                    $trace->output("unenrolling:  $user->username ==> $enrolment->courseid", 1);
+                    $this->unenrol($trace, $enrolment, $user);
                 }
 
             } else if ($unenrolaction == ENROL_EXT_REMOVED_KEEP) {
