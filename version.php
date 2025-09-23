@@ -26,6 +26,6 @@ defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'enrol_json';
 $plugin->release = '0.1.3';
-$plugin->version = 2024091300;
+$plugin->version = 2025091100;
 $plugin->requires = 2020110900;
 $plugin->maturity = MATURITY_STABLE;

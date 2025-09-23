@@ -48,3 +48,4 @@ $string['failedapicall'] = 'Failed to request api url';
 $string['json:config'] = 'Configure json plugin';
 $string['remotegroupfield'] = 'Remote group field';
 $string['localgroupfield'] = 'Local group field';
+$string['auth_remove_suspend_unenrol'] = 'Suspend internal and unenrol user from course';
