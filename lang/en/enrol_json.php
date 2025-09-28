@@ -44,8 +44,13 @@ $string['user_data_mapping'] = 'User data mapping';
 $string['privacy:metadata'] = 'The JSON enrolment plugin does not store any personal data.';
 $string['syncenrolmentstask'] = 'Sync enrolments';
 $string['syncuserstask'] = 'Sync users';
+$string['syncuserstaskenrolments'] = 'Sync users enrolments';
 $string['failedapicall'] = 'Failed to request api url';
 $string['json:config'] = 'Configure json plugin';
 $string['remotegroupfield'] = 'Remote group field';
 $string['localgroupfield'] = 'Local group field';
 $string['auth_remove_suspend_unenrol'] = 'Suspend internal and unenrol user from course';
+$string['extremovedaction'] = 'External unenrol action';
+$string['extremovedaction_help'] = 'Select action to carry out when user enrolment disappears from external enrolment source. <br>Please note<br>- Some user data and settings are purged from course during course unenrolment.<br>- The sync_enrolments task handles the unenrol action when the user details are still present in the Enrolment API but the corresponding enrolments have disappeared.<br>- The sync_enrolments_users task handles unenrolments for user if unenrolaction is set to \'Unenrol user from course\'.
+The unenrolments are executed when a user is completely missing from the Enrolment API but exists in the User API.';
+

@@ -340,6 +340,50 @@ class enrol_json_plugin extends enrol_plugin {
     }
 
     /**
+     * Sync enrolments users
+     *
+     * The users that are present in the User API and not in the Enrolment API
+     * are unenroled from all their courses.
+     *
+     * @param progress_trace $trace
+     * @return int 0 means success, 1 means failure
+     */
+    function sync_enrolments_users(progress_trace $trace) {
+        global $DB;
+        $localcoursefield = $this->get_config('localcoursefield');
+        $localuserfield = $this->get_config('localuserfield');
+        $remoteuserfield = $this->get_config('remoteuserfield');
+        $userlist = $this->get_userlist();
+        $enrolmentlist = $this->get_userenrolments();
+        $unenrolaction    = $this->get_config('unenrolaction');
+        if ($unenrolaction == ENROL_EXT_REMOVED_UNENROL) {
+            foreach ($userlist as $userrecord) {
+                $found = false;
+                foreach ($enrolmentlist as $enrolmentrecord) {
+                    if ($enrolmentrecord->$remoteuserfield == $userrecord->$remoteuserfield) {
+                        $found = true;
+                        continue;
+                    }
+                }
+                if (!$found) {
+                    $user = $DB->get_record('user',
+                    [$localuserfield => $userrecord->$remoteuserfield],
+                    'id, username, idnumber, email');
+                    $existingenrolments = $this->existingenrolments($user, $localcoursefield);
+                    foreach ($existingenrolments as $enrolment) {
+                        $this->unenrol($trace, $enrolment, $user);
+                    }
+                }
+            }
+        } else {
+            $requiredaction = get_string('extremovedunenrol', 'enrol');
+            mtrace("No action required. External unenrol action needs to be set to {$requiredaction} ");
+        }
+        $trace->finished();
+        return 0;
+    }
+
+    /**
      * Synchronizes user from external json to moodle user table.
      *
      * Sync should be done by using idnumber attribute, not username.
@@ -356,6 +400,7 @@ class enrol_json_plugin extends enrol_plugin {
     function sync_users(progress_trace $trace, $do_updates=false) {
         global $CFG, $DB;
         $localcoursefield = $this->get_config('localcoursefield');
+        require_once($CFG->dirroot . '/lib/authlib.php');
         require_once($CFG->dirroot . '/user/lib.php');
         require_once($CFG->libdir.'/filelib.php');
         $count = 0;
