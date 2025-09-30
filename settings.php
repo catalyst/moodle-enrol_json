@@ -128,7 +128,7 @@ if ($hassiteconfig) {
             ENROL_EXT_REMOVED_KEEP           => get_string('extremovedkeep', 'enrol'),
             ENROL_EXT_REMOVED_SUSPEND        => get_string('extremovedsuspend', 'enrol'),
             ENROL_EXT_REMOVED_SUSPENDNOROLES => get_string('extremovedsuspendnoroles', 'enrol'));
-        $settings->add(new admin_setting_configselect('enrol_json/unenrolaction', get_string('extremovedaction', 'enrol'), get_string('extremovedaction_help', 'enrol'), ENROL_EXT_REMOVED_UNENROL, $options));
+        $settings->add(new admin_setting_configselect('enrol_json/unenrolaction', get_string('extremovedaction', 'enrol_json'), get_string('extremovedaction_help', 'enrol_json'), ENROL_EXT_REMOVED_UNENROL, $options));
 
     }
 }
