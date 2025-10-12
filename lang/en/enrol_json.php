@@ -53,4 +53,7 @@ $string['auth_remove_suspend_unenrol'] = 'Suspend internal and unenrol user from
 $string['extremovedaction'] = 'External unenrol action';
 $string['extremovedaction_help'] = 'Select action to carry out when user enrolment disappears from external enrolment source. <br>Please note<br>- Some user data and settings are purged from course during course unenrolment.<br>- The sync_enrolments task handles the unenrol action when the user details are still present in the Enrolment API but the corresponding enrolments have disappeared.<br>- The sync_enrolments_users task handles unenrolments for user if unenrolaction is set to \'Unenrol user from course\'.
 The unenrolments are executed when a user is completely missing from the Enrolment API but exists in the User API.';
+$string['rulesyncheader'] = 'Rule sync settings';
+$string['ruleitems'] = 'Rule sync items';
+$string['ruleitems_desc'] = 'Add rule sync configuration in CSV format. Add one rule per each line in format fieldname, ruleidentifier, actionvalue. For e.g. field_map_email, endswith, @school.com';
 

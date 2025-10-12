@@ -163,7 +163,10 @@ class enrol_json_plugin extends enrol_plugin {
         $studentapiurl = trim($this->config->userapiurl);
         $apipassword = $this->config->apipass;
         $apiusername = trim($this->config->apiuser);
-
+        $rules = get_config('enrol_json', 'ruleitems');
+        if (!empty($rules)) {
+            $rules = explode(PHP_EOL, $rules);
+        }
         $curl = new \curl();
         $options = array(
             'CONNECTTIMEOUT' => 5,
@@ -171,7 +174,6 @@ class enrol_json_plugin extends enrol_plugin {
             'CURLOPT_USERPWD' => "$apiusername:$apipassword"
         );
         $params = array();
-
         $response = $curl->get($studentapiurl, $params, $options);
         $externaljson = json_decode($response);
         if (json_last_error() !== JSON_ERROR_NONE) {
@@ -190,6 +192,24 @@ class enrol_json_plugin extends enrol_plugin {
                 mtrace("duplicate userid found:".$row->{$this->config->remoteuserfield});
                 debugging(print_r($row, true));
             } else {
+                // Check if rules set.
+                if (!empty($rules)) {
+                    foreach ($rules as $rule) {
+                        $rule = str_getcsv($rule);
+                        $item = [
+                            'fieldname' => trim($rule[0]),
+                            'ruleidentifier' => trim($rule[1]),
+                            'actionvalue' => trim($rule[2])
+                        ];
+                        $functioname = $item['ruleidentifier'];
+                        $fieldname = $this->config->{$item['fieldname']};
+                        if (!$functioname($row->{$fieldname}, $item['actionvalue'])) {
+                            mtrace("User skip as missing rule {$functioname} for account
+                             ".  $row->{$fieldname});
+                            continue;
+                        }
+                    }
+                }
                 $users[$row->{$this->config->remoteuserfield}] = $row;
             }
         }
@@ -214,7 +234,6 @@ class enrol_json_plugin extends enrol_plugin {
             'CURLOPT_USERPWD' => "$apiusername:$apipassword"
         );
         $params = array();
-
         $response = $curl->get($enrolmentapiurl, $params, $options);
         $externaljson = json_decode($response);
         if (json_last_error() !== JSON_ERROR_NONE) {
