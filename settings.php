@@ -53,7 +53,6 @@ if ($hassiteconfig) {
         $settings->add(new admin_setting_configtext('enrol_json/remoteuserfield',
             get_string('remoteuserfield', 'enrol_database'), get_string('remoteuserfield_desc', 'enrol_database'), ''));
 
-
         // Label and Sync Options.
         $settings->add(new admin_setting_heading('enrol_json/usersyncheader', new lang_string('usersyncsettings', 'enrol_json'), ''));
 
@@ -129,6 +128,11 @@ if ($hassiteconfig) {
             ENROL_EXT_REMOVED_SUSPEND        => get_string('extremovedsuspend', 'enrol'),
             ENROL_EXT_REMOVED_SUSPENDNOROLES => get_string('extremovedsuspendnoroles', 'enrol'));
         $settings->add(new admin_setting_configselect('enrol_json/unenrolaction', get_string('extremovedaction', 'enrol_json'), get_string('extremovedaction_help', 'enrol_json'), ENROL_EXT_REMOVED_UNENROL, $options));
+
+        // Label and Sync Options.
+        $settings->add(new admin_setting_heading('enrol_json/rulesyncheader', new lang_string('rulesyncheader', 'enrol_json'), ''));
+        $settings->add(new admin_setting_configtextarea('enrol_json/ruleitems', new lang_string('ruleitems', 'enrol_json'),
+        new lang_string('ruleitems_desc', 'enrol_json'), '', PARAM_RAW, '50', '10'));
 
     }
 }
