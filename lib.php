@@ -349,7 +349,8 @@ class enrol_json_plugin extends enrol_plugin {
      * @return int 0 means success, 1 means failure
      */
     function sync_enrolments_users(progress_trace $trace) {
-        global $DB;
+        global $CFG, $DB;
+        require_once($CFG->libdir.'/filelib.php');
         $localcoursefield = $this->get_config('localcoursefield');
         $localuserfield = $this->get_config('localuserfield');
         $remoteuserfield = $this->get_config('remoteuserfield');
