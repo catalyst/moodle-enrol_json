@@ -204,8 +204,7 @@ class enrol_json_plugin extends enrol_plugin {
                         $functioname = $item['ruleidentifier'];
                         $fieldname = $this->config->{$item['fieldname']};
                         if (!$functioname($row->{$fieldname}, $item['actionvalue'])) {
-                            mtrace("User skip as missing rule {$functioname} for account
-                             ".  $row->{$fieldname});
+                            mtrace("User skip as missing rule {$functioname} for account ".  $row->{$fieldname});
                             continue;
                         }
                     }
