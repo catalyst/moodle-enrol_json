@@ -79,7 +79,7 @@ if ($hassiteconfig) {
 
         $settings->add(new admin_setting_configselect('enrol_json/removeuser',
             new lang_string('auth_remove_user_key', 'auth'),
-            new lang_string('auth_remove_user', 'auth'), AUTH_REMOVEUSER_KEEP, $deleteopt));
+            new lang_string('auth_remove_user', 'enrol_json'), AUTH_REMOVEUSER_KEEP, $deleteopt));
 
 
         $authplugin = get_auth_plugin('manual');
@@ -130,7 +130,8 @@ if ($hassiteconfig) {
         $settings->add(new admin_setting_configselect('enrol_json/unenrolaction', get_string('extremovedaction', 'enrol_json'), get_string('extremovedaction_help', 'enrol_json'), ENROL_EXT_REMOVED_UNENROL, $options));
 
         // Label and Sync Options.
-        $settings->add(new admin_setting_heading('enrol_json/rulesyncheader', new lang_string('rulesyncheader', 'enrol_json'), ''));
+        $settings->add(new admin_setting_heading('enrol_json/rulesyncheader', new lang_string('rulesyncheader', 'enrol_json'),
+        new lang_string('rulesyncheader_desc', 'enrol_json')));
         $settings->add(new admin_setting_configtextarea('enrol_json/ruleitems', new lang_string('ruleitems', 'enrol_json'),
         new lang_string('ruleitems_desc', 'enrol_json'), '', PARAM_RAW, '50', '10'));
 
