@@ -53,5 +53,15 @@ $tasks = [
         'month' => '*',
         'dayofweek' => '*',
         'disabled' => true
+    ],
+    [
+        'classname' => '\enrol_json\task\sync_users_all',
+        'blocking' => 0,
+        'minute' => 'R',
+        'hour' => 'R',
+        'day' => '*',
+        'month' => '*',
+        'dayofweek' => '*',
+        'disabled' => true
     ]
 ];

@@ -15,7 +15,7 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Sync users task
+ * Sync enrolments task
  * @package   enrol_json
  * @copyright 2021 Catalyst IT
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
@@ -26,12 +26,12 @@ namespace enrol_json\task;
 defined('MOODLE_INTERNAL') || die();
 
 /**
- * Class sync_enrolments
+ * Class sync_users_all
  * @package   enrol_json
  * @copyright 2021 Catalyst IT
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-class sync_users extends \core\task\scheduled_task {
+class sync_users_all extends \core\task\scheduled_task {
 
     /**
      * Name for this task.
@@ -39,7 +39,7 @@ class sync_users extends \core\task\scheduled_task {
      * @return string
      */
     public function get_name() {
-        return get_string('syncuserstask', 'enrol_json');
+        return get_string('syncuserssalltask', 'enrol_json');
     }
 
     /**
@@ -48,7 +48,6 @@ class sync_users extends \core\task\scheduled_task {
     public function execute() {
 
         $trace = new \text_progress_trace();
-
         if (!enrol_is_enabled('json')) {
             $trace->output('Plugin not enabled');
             return;
@@ -57,22 +56,16 @@ class sync_users extends \core\task\scheduled_task {
             $trace->output('User sync disabled');
             return;
         }
-        if (!empty($removeuser = get_config('enrol_json', 'removeuser'))) {
-            if ($removeuser == AUTH_REMOVEUSER_SUSPEND_UNENROL) {
-                $trace->output("Task cannot be executed. The plugin setting ".
-                    get_string('auth_remove_user_key', 'auth') .' is set to '.
-                    get_string('auth_remove_suspend_unenrol', 'enrol_json'). '. You need to run sync_users_all task instead')  ;
-            }
-            return;
-        }
+
         $enrol = enrol_get_plugin('json');
         if (!$enrol->is_configured()) {
             $trace->output('Plugin not configured');
             return;
         }
+
         \core_php_time_limit::raise();
         raise_memory_limit(MEMORY_HUGE);
 
-        $enrol->sync_users($trace, true);
+        $enrol->sync_users($trace);
     }
 }

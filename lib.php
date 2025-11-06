@@ -423,6 +423,7 @@ class enrol_json_plugin extends enrol_plugin {
         require_once($CFG->dirroot . '/lib/authlib.php');
         require_once($CFG->dirroot . '/user/lib.php');
         require_once($CFG->libdir.'/filelib.php');
+        $now = time();
         $count = 0;
         // List external users.
         $userlist = $this->get_userlist();
@@ -571,6 +572,11 @@ class enrol_json_plugin extends enrol_plugin {
             $trace->output(get_string('auth_dbuserstoadd','auth_db',count($add_users)));
             // Do not use transactions around this foreach, we want to skip problematic users, not revert everything.
             foreach($add_users as $userkey) {
+                if ($count >= 500) {
+                    $trace->output("Processed 500 users, waiting for a while before continuing...");
+                    sleep(MINSECS);  // Wait for a while to avoid overwhelming the server.
+                    $count = 0;
+                }
                 if ($this->config->removeuser == AUTH_REMOVEUSER_SUSPEND || $this->config->removeuser == AUTH_REMOVEUSER_SUSPEND_UNENROL) {
                     if ($olduser = $DB->get_record('user', array($localuserfield => $userkey, 'deleted' => 0, 'suspended' => 1,
                         'mnethostid' => $CFG->mnet_localhost_id))) {
@@ -616,6 +622,9 @@ class enrol_json_plugin extends enrol_plugin {
                 \core\event\user_created::create_from_userid($id)->trigger();
             }
             unset($add_users);
+        }
+        if ($do_updates) {
+            set_config('lastusersynctime', $now, 'enrol_json');
         }
         $trace->finished();
         return 0;
@@ -716,7 +725,7 @@ class enrol_json_plugin extends enrol_plugin {
      */
     public function sync_enrolments(progress_trace $trace) {
         global $DB, $CFG;
-
+        $now = time();
         require_once($CFG->libdir.'/filelib.php');
         require_once($CFG->dirroot . '/group/lib.php');
         $trace->output('Starting user enrolment synchronisation...');
@@ -805,6 +814,10 @@ class enrol_json_plugin extends enrol_plugin {
             // For all courses in the external data for this user.
             foreach ($record->enrolments as $ecourse) {
                 $roleid = $defaultrole;
+                if (empty($ecourse->$coursefield)) {
+                    $trace->output("Skipping enrolment as course field is empty");
+                    continue;
+                }
                 if (!empty($rolefield) && !empty($ecourse->$rolefield)) {
                     if (!empty($roles[$ecourse->$rolefield])) {
                         $roleid = $roles[$ecourse->$rolefield];
@@ -1000,6 +1013,9 @@ class enrol_json_plugin extends enrol_plugin {
         }
 
         $trace->output('...user enrolment synchronisation finished.');
+        if (empty($userid)) {
+            set_config('lastenrolsynctime', $now, 'enrol_json');
+        }
         $trace->finished();
 
         return 0;
