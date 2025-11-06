@@ -163,10 +163,6 @@ class enrol_json_plugin extends enrol_plugin {
         $studentapiurl = trim($this->config->userapiurl);
         $apipassword = $this->config->apipass;
         $apiusername = trim($this->config->apiuser);
-        $rules = get_config('enrol_json', 'ruleitems');
-        if (!empty($rules)) {
-            $rules = explode(PHP_EOL, $rules);
-        }
         $curl = new \curl();
         $options = array(
             'CONNECTTIMEOUT' => 5,
@@ -192,23 +188,6 @@ class enrol_json_plugin extends enrol_plugin {
                 mtrace("duplicate userid found:".$row->{$this->config->remoteuserfield});
                 debugging(print_r($row, true));
             } else {
-                // Check if rules set.
-                if (!empty($rules)) {
-                    foreach ($rules as $rule) {
-                        $rule = str_getcsv($rule);
-                        $item = [
-                            'fieldname' => trim($rule[0]),
-                            'ruleidentifier' => trim($rule[1]),
-                            'actionvalue' => trim($rule[2])
-                        ];
-                        $functioname = $item['ruleidentifier'];
-                        $fieldname = $this->config->{$item['fieldname']};
-                        if (!$functioname($row->{$fieldname}, $item['actionvalue'])) {
-                            mtrace("User skip as missing rule {$functioname} for account ".  $row->{$fieldname});
-                            continue;
-                        }
-                    }
-                }
                 $users[$row->{$this->config->remoteuserfield}] = $row;
             }
         }
@@ -424,6 +403,11 @@ class enrol_json_plugin extends enrol_plugin {
         require_once($CFG->libdir.'/filelib.php');
         $now = time();
         $count = 0;
+        $params = [];
+        $rules = get_config('enrol_json', 'ruleitems');
+        if (!empty($rules)) {
+            $rules = explode(PHP_EOL, $rules);
+        }
         // List external users.
         $userlist = $this->get_userlist();
         $userkeys = array_keys($userlist); // list of user keys.
@@ -436,6 +420,25 @@ class enrol_json_plugin extends enrol_plugin {
                     $this->config->removeuser == AUTH_REMOVEUSER_SUSPEND_UNENROL) {
                 $suspendselect = "AND u.suspended = 0";
             }
+            // Check if rules set.
+            $rulesselect = "";
+            if (!empty($rules)) {
+                foreach ($rules as $rule) {
+                    $rule = str_getcsv($rule);
+                    $item = [
+                        'rulefieldname' => trim($rule[0]),
+                        'ruleidentifier' => trim($rule[1]),
+                        'rulefieldvalue' => trim($rule[2])
+                    ];
+                    $rulefieldname = $this->config->{$item['rulefieldname']};
+                    $rulefieldvalue = $item['rulefieldvalue'];
+                    $functioname = $item['ruleidentifier'];
+                    if ($functioname == 'endswith') {
+                        $rulesselect = ' AND '.$DB->sql_like($rulefieldname, ':rulefieldname', false, false);
+                        $params['rulefieldname'] = "%$rulefieldvalue";
+                    }
+                }
+            }
 
             // Find obsolete users.
             if (count($userlist)) {
@@ -446,7 +449,8 @@ class enrol_json_plugin extends enrol_plugin {
                          WHERE u.auth=:authtype
                            AND u.deleted=0
                            AND u.mnethostid=:mnethostid
-                           $suspendselect";
+                           $suspendselect $rulesselect
+                         ";
                 $params['mnethostid'] = $CFG->mnet_localhost_id;
                 $internalusersrs = $DB->get_recordset_sql($sql, $params);
                 foreach ($internalusersrs as $internaluser) {
@@ -789,7 +793,11 @@ class enrol_json_plugin extends enrol_plugin {
                 $missingusers[] = $record->$userfield;
                 continue;
             }
-
+            $user = $DB->get_record('user', [$localuserfield => $record->$userfield, 'suspended' => 0]);
+            if (empty($user)) {
+                $missingusers[] = $record->$userfield;
+                continue;
+            }
             // Get list of this users current enrolments with enrol_json.
             $existingenrolments = $this->existingenrolments($user, $localcoursefield);
 

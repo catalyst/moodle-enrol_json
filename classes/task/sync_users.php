@@ -22,6 +22,7 @@
  */
 
 namespace enrol_json\task;
+require_once($CFG->dirroot . '/enrol/json/lib.php');
 
 defined('MOODLE_INTERNAL') || die();
 
